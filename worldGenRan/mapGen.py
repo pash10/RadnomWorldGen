@@ -162,7 +162,7 @@ def generate_linked_world():
 
     return biome_coverage
 
-def generate_world_grid(world, biome_symbols, grid_size=10000):
+def generate_world_grid(world, biome_symbols, grid_size=1000):
     # Flatten the grid into 1D
     world_grid = np.zeros((grid_size * grid_size,), dtype=np.object)
 
@@ -197,6 +197,7 @@ def generate_gui(world_grid):
 
     for row in world_grid:
         line = ''.join(map(str, row))   
+        print(line)
         text.insert('end', line + '\n')
     text.pack()
 
