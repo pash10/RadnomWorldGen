@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 import tkinter as tk
-import time
+from flask import Flask, render_template
 
 biomes = {
     'Plains': ['Forest', 'Sunflower Plains', 'Birch Forest', 'Swamp', 'Village', 'Farm', 'City', 'Roads'],
@@ -162,7 +162,7 @@ def generate_linked_world():
 
     return biome_coverage
 
-def generate_world_grid(world, biome_symbols, grid_size=1000):
+def generate_world_grid(world, biome_symbols, grid_size=100):
     # Flatten the grid into 1D
     world_grid = np.zeros((grid_size * grid_size,), dtype=np.object)
 
@@ -190,42 +190,46 @@ def generate_world_grid(world, biome_symbols, grid_size=1000):
     world_grid = np.reshape(world_grid, (grid_size, grid_size))
 
     return world_grid
-
-def generate_gui(world_grid):
+#testing
+def generate_gui(world_grid): 
     root = tk.Tk()
-    text = tk.Text(root, font=("Arial", 8), state='normal')
+    canvas = tk.Canvas(root, width=800, height=800)
+    canvas.pack()
 
-    for row in world_grid:
-        line = ''.join(map(str, row))   
-        print(line)
-        text.insert('end', line + '\n')
-    text.pack()
+    cell_size = 10
+
+    for i, row in enumerate(world_grid):
+        for j, symbol in enumerate(row):
+            x1 = j * cell_size
+            y1 = i * cell_size
+            x2 = x1 + cell_size
+            y2 = y1 + cell_size
+
+            canvas.create_rectangle(x1, y1, x2, y2, fill='white')
+            canvas.create_text((x1 + x2) // 2, (y1 + y2) // 2, text=symbol)
 
     root.mainloop()
 
-
-# Start timer
-start_time = time.time()
-
+def SetworldGrid():
 # Generate a linked world
-world = generate_linked_world()
-
-# Print the biome coverage
-for biome, coverage in world.items():
-    print(f"{biome}: {coverage}")
-
+    world = generate_linked_world()
 # Generate a world grid
-world_grid = generate_world_grid(world, biome_symbols)
-
-# Print the world grid
-print(world_grid)
+    world_grid = generate_world_grid(world, biome_symbols)
+    return world_grid
 
 
-# End timer
-end_time = time.time()
+def web():
+    app = Flask(__name__, template_folder='templates')
 
-# Print the elapsed time
-print(f"Elapsed time: {end_time - start_time} seconds")
+    @app.route('/')
+    def home():
+        # Generate the world grid
+        world_grid = SetworldGrid()
+        # Pass the world grid to the HTML template
+        return render_template('index.html', world_grid=world_grid)
 
-# Generate a GUI
-generate_gui(world_grid)
+    if __name__ == '__main__':
+        app.run()
+
+web()
+
