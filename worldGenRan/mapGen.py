@@ -46,9 +46,9 @@ biomes = {
     'Snowy Spruce Taiga': ['Snowy Taiga', 'City', 'Roads'],
     'Snowy Spruce Taiga Hills': ['Snowy Spruce Taiga', 'City', 'Roads'],
     'Birch Forest Hills': ['Birch Forest', 'City', 'Roads'],
-    'Dark Forest Hills': ['Dark Forest', 'City', 'Roads'],
+    'Dark Forest Hills': ['Dark Forest'],
     'Taiga Hills': ['Taiga', 'City', 'Roads'],
-    'Mountain Edge': ['Mountains', 'City', 'Roads'],
+    'Mountain Edge': ['Mountains'],
     'Gravelly Mountains': ['Mountains', 'City', 'Roads'],
     'City': ['Plains', 'Mountains', 'Jungle', 'Savanna', 'Desert', 'Badlands', 'Farm', 'Village', 'Roads'],
     'Village': ['Plains', 'Sunflower Plains', 'Forest', 'Birch Forest', 'Farm', 'City', 'Roads'],
@@ -125,23 +125,6 @@ def generate_random_world(start_biome, biome_coverage, linked_biomes):
 
     return biome_coverage
 
-def generate_random_world(start_biome, biome_coverage, linked_biomes):
-    stack = [start_biome]
-    visited = set()
-
-    while stack:
-        current_biome = stack.pop()
-        visited.add(current_biome)
-
-        biome_coverage[current_biome] = np.random.uniform(0, 100)
-
-        connected_biomes = linked_biomes[current_biome]
-
-        for biome in connected_biomes:
-            if biome not in visited:
-                stack.append(biome)
-
-    return biome_coverage
 
 def generate_linked_world():
     total_land_area = 100
