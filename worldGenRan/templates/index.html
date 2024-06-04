@@ -1,30 +1,172 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>World Grid</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D World Globe</title>
     <style>
-        table {
-            border-collapse: collapse;
-            width: 100%;
-        }
-
-        td {
-            border: 1px solid black;
-            height: 30px;
-            text-align: center;
-            font-size: 20px;
+        body { margin: 0; }
+        canvas { display: block; }
+        #biome-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
         }
     </style>
 </head>
 <body>
-    <table>
-        {% for row in world_grid %}
-            <tr>
-                {% for symbol in row %}
-                    <td>{{ symbol }}</td>
-                {% endfor %}
-            </tr>
-        {% endfor %}
-    </table>
+    <div id="biome-info">Click on a chunk to see biome information</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+        const worldGrid = {{ world_grid|tojson }};
+        const gridSize = worldGrid.length;
+        const height = worldGrid[0][0].length;
+
+        // Create scene, camera, and renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Set camera position
+        camera.position.z = gridSize * 1.5;
+        camera.position.y = gridSize * 0.5;
+
+        // Add lighting
+        const light = new THREE.AmbientLight(0x404040); // soft white light
+        scene.add(light);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        scene.add(directionalLight);
+
+        // Create OrbitControls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.25;
+        controls.enableZoom = true;
+
+        // Create a mapping from symbols to colors
+        const biomeColors = {
+            '\u2744\u1F30A': 0xadd8e6, // Frozen River
+            '\u2744': 0xffffff,       // Snowy Tundra
+            '\u26F0': 0x808080,       // Snowy Mountains, Mountains, Alpine
+            '\u1F341': 0x228B22,      // Boreal Forest
+            '\u1F332': 0x006400,      // Forest
+            '\u1F33F': 0x7CFC00,      // Grassland
+            '\u1F333': 0x8B4513,      // Deciduous Forest, Temperate Rainforest
+            '\u2600': 0xFFD700,       // Desert
+            '\u1F405': 0xD2B48C,      // Savanna
+            '\u1F33E': 0x808000,      // Chaparral
+            '\u1F34C': 0x00FF00,      // Tropical Rainforest
+            '\u1F4A7': 0x0000FF,      // Wetlands
+            '\u1F33C': 0x556B2F,      // Mangrove
+            '\u1F3D4': 0xA52A2A,      // Badlands
+            '\u26F1': 0x808080,       // Limestone Cave
+            '\u2744': 0xFFFFFF,       // Ice Cave
+            '\u2747': 0xD3D3D3,       // Crystal Cave
+            '\u1F30B': 0xFF4500,      // Volcanic Cave
+            '\u1F5FF': 0x696969       // Ston
+        };
+
+        const biomeNames = {
+            '\u2744\u1F30A': 'Frozen River',
+            '\u2744': 'Snowy Tundra',
+            '\u26F0': 'Snowy Mountains, Mountains, Alpine',
+            '\u1F341': 'Boreal Forest',
+            '\u1F332': 'Forest',
+            '\u1F33F': 'Grassland',
+            '\u1F333': 'Deciduous Forest, Temperate Rainforest',
+            '\u2600': 'Desert',
+            '\u1F405': 'Savanna',
+            '\u1F33E': 'Chaparral',
+            '\u1F34C': 'Tropical Rainforest',
+            '\u1F4A7': 'Wetlands',
+            '\u1F33C': 'Mangrove',
+            '\u1F3D4': 'Badlands',
+            '\u26F1': 'Limestone Cave',
+            '\u2744': 'Ice Cave',
+            '\u2747': 'Crystal Cave',
+            '\u1F30B': 'Volcanic Cave',
+            '\u1F5FF': 'Ston'
+        };
+
+        // Function to convert grid coordinates to spherical coordinates
+        function sphericalPosition(i, j, k, gridSize, height) {
+            const phi = (i / gridSize) * Math.PI; // from 0 to PI
+            const theta = (j / gridSize) * 2 * Math.PI; // from 0 to 2PI
+            const r = gridSize / 2 + (k - height / 2) * 0.1; // slight offset for layers
+
+            const x = r * Math.sin(phi) * Math.cos(theta);
+            const y = r * Math.cos(phi);
+            const z = r * Math.sin(phi) * Math.sin(theta);
+
+            return { x, y, z };
+        }
+
+        // Create a grid of cubes on a sphere
+        const cubes = [];
+        for (let i = 0; i < gridSize; i++) {
+            for (let j = 0; j < gridSize; j++) {
+                for (let k = 0; k < height; k++) {
+                    const symbol = worldGrid[i][j][k];
+                    if (symbol) {
+                        const color = biomeColors[symbol] || 0x000000; // Default to black if symbol not found
+                        const geometry = new THREE.BoxGeometry(1, 1, 1);
+                        const material = new THREE.MeshBasicMaterial({ color: color });
+                        const cube = new THREE.Mesh(geometry, material);
+                        const pos = sphericalPosition(i, j, k, gridSize, height);
+                        cube.position.set(pos.x, pos.y, pos.z);
+                        scene.add(cube);
+                        cubes.push({ mesh: cube, symbol: symbol });
+                    }
+                }
+            }
+        }
+
+        // Render the scene
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Add raycaster and mouse for interaction
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function onClick(event) {
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(cubes.map(c => c.mesh));
+
+            if (intersects.length > 0) {
+                const intersected = intersects[0];
+                const cube = cubes.find(c => c.mesh === intersected.object);
+                if (cube) {
+                    document.getElementById('biome-info').innerText = `Biome: ${biomeNames[cube.symbol]}`;
+                }
+            }
+        }
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('click', onClick);
+    </script>
 </body>
 </html>

@@ -1,218 +1,180 @@
 import random
 import numpy as np
-import tensorflow as tf
-import tensorflow_probability as tfp
 import tkinter as tk
 from flask import Flask, render_template
+from noise import pnoise3
 
-biomes = {
-    'Plains': ['Forest', 'Sunflower Plains', 'Birch Forest', 'Swamp', 'Village', 'Farm', 'City', 'Roads'],
-    'Sunflower Plains': ['Plains', 'Forest', 'Village', 'Farm', 'City', 'Roads'],
-    'Forest': ['Plains', 'Sunflower Plains', 'Birch Forest', 'Dark Forest', 'Village', 'City', 'Roads'],
-    'Birch Forest': ['Plains', 'Forest', 'Dark Forest', 'Mountains', 'Village', 'City', 'Roads'],
-    'Dark Forest': ['Forest', 'Birch Forest', 'Mountains', 'Village', 'City', 'Roads'],
-    'Mountains': ['Birch Forest', 'Dark Forest', 'Jungle', 'Taiga', 'Snowy Tundra', 'City', 'Roads'],
-    'Jungle': ['Mountains', 'Bamboo Jungle', 'Savanna', 'City', 'Roads'],
-    'Bamboo Jungle': ['Jungle', 'Savanna', 'City', 'Roads'],
-    'Savanna': ['Jungle', 'Bamboo Jungle', 'Desert', 'Plains', 'City', 'Roads'],
-    'Desert': ['Savanna', 'Plains', 'Badlands', 'Mountains', 'City', 'Roads'],
-    'Badlands': ['Desert', 'Mountains', 'City', 'Roads'],
-    'Taiga': ['Mountains', 'Snowy Tundra', 'Snowy Taiga', 'City', 'Roads'],
-    'Snowy Tundra': ['Mountains', 'Taiga', 'Snowy Taiga', 'Frozen River', 'City', 'Roads'],
-    'Snowy Taiga': ['Taiga', 'Snowy Tundra', 'Snowy Taiga Mountains', 'City', 'Roads'],
-    'Frozen River': ['Snowy Tundra', 'River', 'City', 'Roads'],
-    'River': ['Frozen River', 'Beach', 'City', 'Roads'],
-    'Ocean': ['River', 'Beach', 'City', 'Roads'],
-    'Beach': ['River', 'Ocean', 'City', 'Roads'],
-    'Stone Shore': ['Beach', 'River', 'City', 'Roads'],
-    'Mushroom Fields': ['Mushroom Field Shore', 'City', 'Roads'],
-    'Mushroom Field Shore': ['Mushroom Fields', 'City', 'Roads'],
-    'Swamp': ['Plains', 'Forest', 'Jungle', 'Swamp Hills', 'City', 'Roads'],
-    'Swamp Hills': ['Swamp', 'Mountains', 'City', 'Roads'],
-    'Giant Tree Taiga': ['Taiga', 'Giant Spruce Taiga', 'City', 'Roads'],
-    'Giant Spruce Taiga': ['Giant Tree Taiga', 'City', 'Roads'],
-    'Giant Spruce Taiga Hills': ['Giant Spruce Taiga', 'City', 'Roads'],
-    'Modified Jungle': ['Jungle', 'Jungle Edge', 'City', 'Roads'],
-    'Jungle Edge': ['Modified Jungle', 'Jungle', 'City', 'Roads'],
-    'Modified Jungle Edge': ['Jungle Edge', 'Jungle', 'City', 'Roads'],
-    'Bamboo Jungle Hills': ['Bamboo Jungle', 'City', 'Roads'],
-    'Modified Badlands Plateau': ['Badlands Plateau', 'City', 'Roads'],
-    'Badlands Plateau': ['Badlands', 'City', 'Roads'],
-    'Wooded Badlands Plateau': ['Badlands Plateau', 'City', 'Roads'],
-    'Modified Wooded Badlands Plateau': ['Wooded Badlands Plateau', 'City', 'Roads'],
-    'Desert Hills': ['Desert', 'City', 'Roads'],
-    'Snowy Taiga Hills': ['Snowy Taiga', 'City', 'Roads'],
-    'Snowy Taiga Mountains': ['Snowy Taiga', 'Snowy Taiga Hills', 'City', 'Roads'],
-    'Snowy Spruce Taiga': ['Snowy Taiga', 'City', 'Roads'],
-    'Snowy Spruce Taiga Hills': ['Snowy Spruce Taiga', 'City', 'Roads'],
-    'Birch Forest Hills': ['Birch Forest', 'City', 'Roads'],
-    'Dark Forest Hills': ['Dark Forest'],
-    'Taiga Hills': ['Taiga', 'City', 'Roads'],
-    'Mountain Edge': ['Mountains'],
-    'Gravelly Mountains': ['Mountains', 'City', 'Roads'],
-    'City': ['Plains', 'Mountains', 'Jungle', 'Savanna', 'Desert', 'Badlands', 'Farm', 'Village', 'Roads'],
-    'Village': ['Plains', 'Sunflower Plains', 'Forest', 'Birch Forest', 'Farm', 'City', 'Roads'],
-    'Roads': ['Savanna', 'City', 'Village'],
-    'Farm': ['Plains', 'Sunflower Plains', 'Forest', 'Birch Forest', 'Village', 'City', 'Roads'],
-}
+class Biome:
+    def __init__(self, biome_id, name, symbol, elevation_range, climate_range, neighbors):
+        self.biome_id = biome_id
+        self.name = name
+        self.symbol = symbol
+        self.elevation_range = elevation_range
+        self.climate_range = climate_range
+        self.neighbors = neighbors
 
-biome_symbols = {
-    'Plains': '\u2693',  # anchor
-    'Sunflower Plains': '\u2600',  # sun
-    'Forest': '\u1F332',  # tree
-    'Birch Forest': '\u1F333',  # deciduous tree
-    'Dark Forest': '\u1F43B',  # bear, suggesting wildlife
-    'Mountains': '\u26F0',  # mountain
-    'Jungle': '\u1F34C',  # banana, suggesting tropical
-    'Bamboo Jungle': '\u1F38D',  # bamboo decoration
-    'Savanna': '\u1F405',  # lion, suggesting wildlife
-    'Desert': '\u2600',  # sun, suggesting heat
-    'Badlands': '\u1F3D4',  # volcano
-    'Taiga': '\u1F341',  # maple leaf
-    'Snowy Tundra': '\u2744',  # snowflake
-    'Snowy Taiga': '\u2746',  # more snowflakes
-    'Frozen River': '\u2744\u1F30A',  # snowflake and wave, suggesting cold water
-    'River': '\u1F30A',  # wave
-    'Ocean': '\u1F30A\u1F30A',  # two waves
-    'Beach': '\u2600\u1F30A',  # sun and wave, suggesting pleasant water-side location
-    'Stone Shore': '\u26FA',  # tent, suggesting wilderness
-    'Mushroom Fields': '\u1F344',  # mushroom
-    'Mushroom Field Shore': '\u1F344\u1F30A',  # mushroom and wave, suggesting mushroom near water
-    'Swamp': '\u1F4A7',  # droplet, suggesting water and possibly wetlands
-    'Swamp Hills': '\u1F4A7\u26F0',  # droplet and mountain, suggesting hilly swamp
-    'Giant Tree Taiga': '\u1F332\u1F332',  # two trees, suggesting lots of greenery
-    'Giant Spruce Taiga': '\u1F332\u1F340',  # tree and clover, suggesting lots of greenery
-    'Giant Spruce Taiga Hills': '\u1F332\u1F340\u26F0',  # tree, clover, and mountain, suggesting hilly green area
-    'Modified Jungle': '\u1F34C\u273F',  # banana and sparkles, suggesting an exceptional jungle
-    'Jungle Edge': '\u1F34C\u2693',  # banana and anchor, suggesting the edge of a jungle
-    'Modified Jungle Edge': '\u1F34C\u2693\u273F',  # banana, anchor, and sparkles, suggesting an exceptional edge of a jungle
-    'Bamboo Jungle Hills': '\u1F38D\u26F0',  # bamboo and mountain, suggesting hilly bamboo area
-    'Modified Badlands Plateau': '\u1F3D4\u273F',  # volcano and sparkles, suggesting an exceptional badlands
-    'Badlands Plateau': '\u1F3D4\u26F0',  # volcano and mountain, suggesting a plateau in the badlands
-    'Wooded Badlands Plateau': '\u1F3D4\u1F332\u26F0',  # volcano, tree, and mountain, suggesting a wooded plateau in the badlands
-    'Modified Wooded Badlands Plateau': '\u1F3D4\u1F332\u26F0\u273F',  # volcano, tree, mountain, and sparkles, suggesting an exceptional wooded plateau in the badlands
-    'Desert Hills': '\u2600\u26F0',  # sun and mountain, suggesting hilly desert
-    'Snowy Taiga Hills': '\u2744\u1F341\u26F0',  # snowflake, maple leaf, and mountain, suggesting hilly snowy area
-    'Snowy Taiga Mountains': '\u2744\u1F341\u26F0',  # snowflake, maple leaf, and mountain, suggesting mountainous snowy area
-    'Snowy Spruce Taiga': '\u2744\u1F332',  # snowflake and tree, suggesting snowy greenery
-    'Snowy Spruce Taiga Hills': '\u2744\u1F332\u26F0',  # snowflake, tree, and mountain, suggesting hilly snowy greenery
-    'Birch Forest Hills': '\u1F333\u26F0',  # deciduous tree and mountain, suggesting hilly forest
-    'Dark Forest Hills': '\u1F43B\u26F0',  # bear and mountain, suggesting hilly wildlife area
-    'Taiga Hills': '\u1F341\u26F0',  # maple leaf and mountain, suggesting hilly area with maple trees
-    'Mountain Edge': '\u26F0\u2693',  # mountain and anchor, suggesting the edge of a mountain
-    'Gravelly Mountains': '\u26F0\u26F0',  # two mountains, suggesting rocky area
-    'City': '\u1F3E0',  # house, suggesting a residential area
-    'Village': '\u1F3D8',  # park, suggesting a rural area
-    'Roads': '\u1F6A5',  # traffic light, suggesting transportation
-    'Farm': '\u1F33D',  # ear of corn, suggesting agriculture
-}
+    def is_valid_neighbor(self, other_biome):
+        return other_biome.biome_id in self.neighbors
 
-def generate_random_world(start_biome, biome_coverage, linked_biomes):
-    stack = [start_biome]
-    visited = set()
+# Define biomes
+biomes = [
+    Biome(1, 'Frozen River', '\u2744\u1F30A', (0, 0.33), (0, 0.33), [2, 3, 4]),
+    Biome(2, 'Snowy Tundra', '\u2744', (0.33, 0.66), (0, 0.33), [1, 3, 4, 5]),
+    Biome(3, 'Snowy Mountains', '\u26F0', (0.66, 1), (0, 0.33), [1, 2, 4, 5, 6]),
+    Biome(4, 'Tundra', '\u2744', (0.33, 0.66), (0.33, 0.66), [1, 2, 3, 5, 6]),
+    Biome(5, 'Boreal Forest', '\u1F341', (0.33, 0.66), (0.33, 0.66), [2, 3, 4, 6, 10, 11]),
+    Biome(6, 'Alpine', '\u26F0', (0.66, 1), (0.33, 0.66), [3, 4, 5, 10, 11]),
+    Biome(7, 'Plains', '\u2693', (0, 0.33), (0.66, 1), [8, 9, 10, 16, 18]),
+    Biome(8, 'Forest', '\u1F332', (0.33, 0.66), (0.66, 1), [7, 9, 10, 11, 12]),
+    Biome(9, 'Mountains', '\u26F0', (0.66, 1), (0.66, 1), [8, 7, 10, 16, 12]),
+    Biome(10, 'Grassland', '\u1F33F', (0, 0.33), (0.66, 1), [7, 8, 9, 18, 11]),
+    Biome(11, 'Deciduous Forest', '\u1F333', (0.33, 0.66), (0.66, 1), [5, 6, 10, 8, 12]),
+    Biome(12, 'Temperate Rainforest', '\u1F333', (0.66, 1), (0.66, 1), [8, 9, 11]),
+    Biome(13, 'Desert', '\u2600', (0, 0.33), (0.66, 1), [14, 15, 16, 20]),
+    Biome(14, 'Savanna', '\u1F405', (0.33, 0.66), (0.66, 1), [13, 15, 16, 17]),
+    Biome(15, 'Desert Hills', '\u2600\u26F0', (0.66, 1), (0.66, 1), [13, 14, 16, 20]),
+    Biome(16, 'Chaparral', '\u1F33E', (0.33, 0.66), (0.66, 1), [7, 9, 10, 13, 14, 15, 17]),
+    Biome(17, 'Tropical Rainforest', '\u1F34C', (0.66, 1), (0.66, 1), [14, 16, 18, 19]),
+    Biome(18, 'Wetlands', '\u1F4A7', (0, 0.33), (0.66, 1), [7, 10, 17, 19]),
+    Biome(19, 'Mangrove', '\u1F33C', (0.33, 0.66), (0.66, 1), [17, 18]),
+    Biome(20, 'Badlands', '\u1F3D4', (0.66, 1), (0.66, 1), [13, 15]),
+    # Cave biomes
+ 
+    Biome(21, 'Limestone Cave', '\u26F1', (0, 0.33), (0, 0.33), [25]),
+    Biome(22, 'Ice Cave', '\u2744', (0, 0.33), (0, 0.33), [25]),
+    Biome(23, 'Crystal Cave', '\u2747', (0, 0.33), (0, 0.33), [25]),
+    Biome(24, 'Volcanic Cave', '\u1F30B', (0, 0.33), (0, 0.33), [25]),
+    Biome(25, 'Ston', '\u1F5FF', (0, 1), (0, 1), [21, 22, 23, 24, 25]),
+]
 
-    while stack:
-        current_biome = stack.pop()
-        visited.add(current_biome)
+# Create a lookup dictionary for biomes by ID
+biomes_by_id = {biome.biome_id: biome for biome in biomes}
 
-        biome_coverage[current_biome] = np.random.uniform(0, 100)
+def generate_elevation_grid(grid_size, height, scale=100.0):
+    elevation = np.zeros((grid_size, grid_size, height))
+    for i in range(grid_size):
+        for j in range(grid_size):
+            for k in range(height):
+                elevation[i][j][k] = pnoise3(i / scale, j / scale, k / scale, octaves=6, persistence=0.5, lacunarity=2.0, repeatx=grid_size, repeaty=grid_size, repeatz=height, base=42)
+    elevation = (elevation - elevation.min()) / (elevation.max() - elevation.min())
+    return elevation
 
-        connected_biomes = linked_biomes[current_biome]
+def generate_climate_grid(grid_size):
+    climate = np.zeros((grid_size, grid_size))
+    for i in range(grid_size):
+        for j in range(grid_size):
+            latitude_factor = abs((i / grid_size) - 0.5) * 2
+            climate[i][j] = latitude_factor
+    return climate
 
-        for biome in connected_biomes:
-            if biome not in visited:
-                stack.append(biome)
+def generate_caves(grid_size, height, scale=50.0):
+    caves = np.zeros((grid_size, grid_size, height))
+    for i in range(grid_size):
+        for j in range(grid_size):
+            for k in range(height):
+                caves[i][j][k] = pnoise3(i / scale, j / scale, k / scale, octaves=4, persistence=0.5, lacunarity=2.0, repeatx=grid_size, repeaty=grid_size, repeatz=height, base=84)
+    caves = (caves > 0.5).astype(int)  # Threshold to create cave spaces
+    return caves
 
-    return biome_coverage
+def get_biome_id(climate, elevation, is_cave=False):
+    if is_cave:
+        cave_biomes = [biomes_by_id[21], biomes_by_id[22], biomes_by_id[23], biomes_by_id[24]]
+        return random.choice(cave_biomes).biome_id
+    else:
+        for biome in biomes:
+            if biome.elevation_range[0] <= elevation <= biome.elevation_range[1] and biome.climate_range[0] <= climate <= biome.climate_range[1]:
+                return biome.biome_id
+    return None
 
+def assign_biomes(elevation_grid, climate_grid, grid_size, height, caves_grid):
+    biomes_grid = np.empty((grid_size, grid_size, height), dtype=int)
+    for i in range(grid_size):
+        for j in range(grid_size):
+            for k in range(height):
+                is_cave = caves_grid[i, j, k] == 1
+                climate = climate_grid[i, j]
+                elevation = elevation_grid[i, j, k]
+                biomes_grid[i, j, k] = get_biome_id(climate, elevation, is_cave)
+    return biomes_grid
 
-def generate_linked_world():
-    total_land_area = 100
+def is_valid_transition(biome1_id, biome2_id):
+    if biome1_id == biome2_id:
+        return True
+    if biome1_id in biomes_by_id and biome2_id in biomes_by_id:
+        return biomes_by_id[biome1_id].is_valid_neighbor(biomes_by_id[biome2_id])
+    return False
 
-    biome_coverage = {}
-    linked_biomes = {}
+def smooth_biome_transitions(biomes_grid, grid_size, height):
+    new_biomes = biomes_grid.copy()
+    for i in range(1, grid_size-1):
+        for j in range(1, grid_size-1):
+            for k in range(1, height-1):
+                current_biome = biomes_grid[i, j, k]
+                surrounding_biomes = [
+                    biomes_grid[i-1, j, k], biomes_grid[i+1, j, k], biomes_grid[i, j-1, k], biomes_grid[i, j+1, k],
+                    biomes_grid[i, j, k-1], biomes_grid[i, j, k+1]
+                ]
+                for neighbor in surrounding_biomes:
+                    if not is_valid_transition(current_biome, neighbor):
+                        valid_neighbors = [b for b in surrounding_biomes if is_valid_transition(current_biome, b)]
+                        if valid_neighbors:
+                            new_biomes[i, j, k] = random.choice(valid_neighbors)
+                        break
+    return new_biomes
 
-    start_biome = random.choice(list(biomes.keys()))
-    biome_coverage[start_biome] = np.random.uniform(0, 100)
-
-    for biome in biomes:
-        if biome not in biome_coverage:
-            biome_coverage = generate_random_world(biome, biome_coverage, biomes)
-
-    total_biome_coverage = sum(biome_coverage.values())
-    scaling_factor = total_land_area / total_biome_coverage
-    biome_coverage = {biome: value * scaling_factor for biome, value in biome_coverage.items()}
-
-    return biome_coverage
-
-def generate_world_grid(world, biome_symbols, grid_size=100):
-    # Flatten the grid into 1D
-    world_grid = np.zeros((grid_size * grid_size,), dtype=np.object)
-
-    # Calculate total area for scaling
-    total_area = sum(world.values())
-
-    # Create a flattened representation of the grid
-    idx = 0
-    for biome, area in world.items():
-        # Calculate the number of cells to fill for this biome
-        num_cells = int((area / total_area) * (grid_size * grid_size))
-
-        # Get the symbol for this biome
-        symbol = biome_symbols.get(biome, '?')
-
-        # Fill the cells
-        for _ in range(num_cells):
-            world_grid[idx] = symbol
-            idx += 1
-
-    # Randomize the grid to distribute biomes
-    np.random.shuffle(world_grid)
-
-    # Reshape the grid back into 2D
-    world_grid = np.reshape(world_grid, (grid_size, grid_size))
-
+def generate_world_grid(grid_size=50, height=50):
+    elevation_grid = generate_elevation_grid(grid_size, height)
+    climate_grid = generate_climate_grid(grid_size)
+    caves_grid = generate_caves(grid_size, height)
+    biomes_grid = assign_biomes(elevation_grid, climate_grid, grid_size, height, caves_grid)
+    smoothed_biomes = smooth_biome_transitions(biomes_grid, grid_size, height)
+    
+    # Combine elevation, caves, and biomes into one grid
+    world_grid = np.empty((grid_size, grid_size, height), dtype=object)
+    for i in range(grid_size):
+        for j in range(grid_size):
+            for k in range(height):
+                biome_id = smoothed_biomes[i, j, k]
+                world_grid[i, j, k] = biomes_by_id[biome_id].symbol
     return world_grid
-#testing
+
+# Testing function to display the world
 def generate_gui(world_grid): 
     root = tk.Tk()
-    canvas = tk.Canvas(root, width=800, height=800)
+    canvas = tk.Canvas(root, width=100, height=100)
     canvas.pack()
 
-    cell_size = 10
+    cell_size = 8
 
-    for i, row in enumerate(world_grid):
-        for j, symbol in enumerate(row):
-            x1 = j * cell_size
-            y1 = i * cell_size
-            x2 = x1 + cell_size
-            y2 = y1 + cell_size
+    for i in range(len(world_grid[0][0])):  # Iterate over height
+        for j in range(len(world_grid)):  # Iterate over grid_size
+            for k in range(len(world_grid[0])):  # Iterate over grid_size
+                symbol = world_grid[j, k, i]
+                x1 = k * cell_size
+                y1 = j * cell_size
+                x2 = x1 + cell_size
+                y2 = y1 + cell_size
 
-            canvas.create_rectangle(x1, y1, x2, y2, fill='white')
-            canvas.create_text((x1 + x2) // 2, (y1 + y2) // 2, text=symbol)
+                canvas.create_rectangle(x1, y1, x2, y2, fill='white')
+                canvas.create_text((x1 + x2) // 2, (y1 + y2) // 2, text=symbol)
 
     root.mainloop()
 
 def SetworldGrid():
-# Generate a linked world
-    world = generate_linked_world()
-# Generate a world grid
-    world_grid = generate_world_grid(world, biome_symbols)
+    # Generate a world grid
+    world_grid = generate_world_grid()
     return world_grid
-
 
 def web():
     app = Flask(__name__, template_folder='templates')
 
     @app.route('/')
     def home():
-        # Generate the world grid
         world_grid = SetworldGrid()
-        # Pass the world grid to the HTML template
-        return render_template('index.html', world_grid=world_grid)
+        world_grid_list = world_grid.tolist()
+        return render_template('index.html', world_grid=world_grid_list)
 
     if __name__ == '__main__':
-        app.run()
+        app.run(debug=True)
 
 web()
-
